@@ -1,0 +1,80 @@
+/*
+ * Copyright (C) 2022  Mikusch
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
+"Games"
+{
+	"tf"
+	{
+		"Signatures"
+		{
+			"CEconItemView::GetStaticData"
+			{
+				"library"	"server"
+				"linux"		"@_ZNK13CEconItemView13GetStaticDataEv"
+				"windows"	"\x0F\xB7\x41\x04\x50\xE8\x2A\x2A\x2A\x2A\x8B\xC8\xE8\x2A\x2A\x2A\x2A\x6A\x00\x68\x2A\x2A\x2A\x2A\x68\x2A\x2A\x2A\x2A\x6A\x00\x50\xE8\x2A\x2A\x2A\x2A\x83\xC4\x14\xC3"
+			}
+			"AI_CriteriaSet::FindCriterionIndex"
+			{
+				"linux"		"@_ZNK14AI_CriteriaSet18FindCriterionIndexEPKc"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\xFF\x75\x08"
+			}
+			"AI_CriteriaSet::RemoveCriteria"
+			{
+				"linux"		"@_ZN14AI_CriteriaSet14RemoveCriteriaEPKc"
+				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\x57\xFF\x75\x08"
+			}
+		}
+		"Offsets"
+		{
+			"CBaseEntity::ModifyOrAppendCriteria"
+			{
+				"library"	"server"
+				"linux"		"122"
+				"windows"	"121"
+			}
+			"CEconItemDefinition::m_pszHolidayRestriction"
+			{
+				"linux"		"288"
+				"windows"	"288"
+			}
+		}
+		"Functions"
+		{
+			"CEconItemView::GetStaticData"
+			{
+				"signature"	"CEconItemView::GetStaticData"
+				"callconv"	"thiscall"
+				"return"	"int"
+				"this"		"ignore"
+			}
+			"CBaseEntity::ModifyOrAppendCriteria"
+			{
+				"offset"	"CBaseEntity::ModifyOrAppendCriteria"
+				"hooktype"	"entity"
+				"return"	"void"
+				"this"		"entity"
+				"arguments"
+				{
+					"criteriaSet"
+					{
+						"type"	"int"
+					}
+				}
+			}
+		}
+	}
+}
