@@ -31,6 +31,7 @@ DynamicHook g_DHookModifyOrAppendCriteria;
 Handle g_SDKCallFindCriterionIndex;
 Handle g_SDKCallRemoveCriteria;
 
+bool g_IsMapRunning;
 bool g_ForceHalloweenOrFullMoonActive;
 
 public Plugin myinfo =
@@ -94,6 +95,16 @@ public void OnPluginStart()
 	}
 }
 
+public void OnMapStart()
+{
+	g_IsMapRunning = true;
+}
+
+public void OnMapEnd()
+{
+	g_IsMapRunning = false;
+}
+
 public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 {
 	// Force-enable Halloween or Full Moon if our code requests it
@@ -124,7 +135,9 @@ public void OnClientPutInServer(int client)
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	// Remove halloween health kit models, unless it's actually Halloween or Full Moon
+	if (!g_IsMapRunning)
+		return;
+	
 	if (!strncmp(classname, "item_healthkit_", 15))
 		SDKHook(entity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
 }
@@ -165,13 +178,11 @@ public MRESReturn DHookCallback_ModifyOrAppendCriteria_Post(int entity, DHookPar
 	return MRES_Ignored;
 }
 
-public void SDKHookCB_HealthKit_SpawnPost(int iEntity)
+public void SDKHookCB_HealthKit_SpawnPost(int entity)
 {
-	// Force non-holiday model index unless it's Halloween or Full Moon
+	// Force non-holiday model index unless it's actually Halloween or Full Moon
 	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
-	{
-		SetEntProp(iEntity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
-	}
+		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
 }
 
 public void ConVarChanged_ForcedHoliday(ConVar convar, const char[] oldValue, const char[] newValue)

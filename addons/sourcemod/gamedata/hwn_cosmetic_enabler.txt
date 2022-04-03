@@ -29,11 +29,13 @@
 			}
 			"AI_CriteriaSet::FindCriterionIndex"
 			{
+				"library"	"server"
 				"linux"		"@_ZNK14AI_CriteriaSet18FindCriterionIndexEPKc"
 				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\xFF\x75\x08"
 			}
 			"AI_CriteriaSet::RemoveCriteria"
 			{
+				"library"	"server"
 				"linux"		"@_ZN14AI_CriteriaSet14RemoveCriteriaEPKc"
 				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\x57\xFF\x75\x08"
 			}
@@ -42,7 +44,6 @@
 		{
 			"CBaseEntity::ModifyOrAppendCriteria"
 			{
-				"library"	"server"
 				"linux"		"122"
 				"windows"	"121"
 			}
