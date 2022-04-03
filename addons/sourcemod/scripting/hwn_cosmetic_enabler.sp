@@ -24,22 +24,23 @@
 
 ConVar tf_forced_holiday;
 
-int g_OffsetHolidayRestriction;
+int g_OffsHolidayRestriction;
 
-DynamicDetour g_DHookGetStaticData;
+DynamicDetour g_DHookItemIsAllowed;
 DynamicHook g_DHookModifyOrAppendCriteria;
+Handle g_SDKCallGetStaticData;
 Handle g_SDKCallFindCriterionIndex;
 Handle g_SDKCallRemoveCriteria;
 
-bool g_IsMapRunning;
-bool g_ForceHalloweenOrFullMoonActive;
+bool g_bIsMapRunning;
+bool g_bForceHalloweenOrFullMoonActive;
 
 public Plugin myinfo =
 {
 	name = "[TF2] Halloween Cosmetic Enabler",
 	author = "Mikusch",
 	description = "Enables Halloween cosmetics and spells regardless of current holiday",
-	version = "1.0.0",
+	version = "1.1.0",
 	url = "https://github.com/Mikusch/HalloweenCosmeticEnabler"
 }
 
@@ -51,24 +52,31 @@ public void OnPluginStart()
 	GameData gamedata = new GameData("hwn_cosmetic_enabler");
 	if (gamedata)
 	{
-		g_OffsetHolidayRestriction = gamedata.GetOffset("CEconItemDefinition::m_pszHolidayRestriction");
-		if (!g_OffsetHolidayRestriction)
+		g_OffsHolidayRestriction = gamedata.GetOffset("CEconItemDefinition::m_pszHolidayRestriction");
+		if (!g_OffsHolidayRestriction)
 			LogError("Failed to find offset for CEconItemDefinition::m_pszHolidayRestriction");
 		
-		g_DHookGetStaticData = DynamicDetour.FromConf(gamedata, "CEconItemView::GetStaticData");
-		if (g_DHookGetStaticData)
+		g_DHookItemIsAllowed = DynamicDetour.FromConf(gamedata, "CTFPlayer::ItemIsAllowed");
+		if (g_DHookItemIsAllowed)
 		{
-			if (!g_DHookGetStaticData.Enable(Hook_Post, DHookCallback_GetStaticData_Post))
-				LogError("Failed to enable post detour for CEconItemView::GetStaticData");
+			if (!g_DHookItemIsAllowed.Enable(Hook_Pre, DHookCallback_ItemIsAllowed_Pre))
+				LogError("Failed to enable pre detour for CTFPlayer::ItemIsAllowed");
 		}
 		else
 		{
-			LogError("Failed to setup detour for CEconItemView::GetStaticData");
+			LogError("Failed to setup detour for CTFPlayer::ItemIsAllowed");
 		}
 		
 		g_DHookModifyOrAppendCriteria = DynamicHook.FromConf(gamedata, "CBaseEntity::ModifyOrAppendCriteria");
 		if (!g_DHookModifyOrAppendCriteria)
 			LogError("Failed to find offset for CBaseEntity::ModifyOrAppendCriteria");
+		
+		StartPrepSDKCall(SDKCall_Raw);
+		PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CEconItemView::GetStaticData");
+		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
+		g_SDKCallGetStaticData = EndPrepSDKCall();
+		if (!g_SDKCallGetStaticData)
+			LogError("Failed to create SDKCall: CEconItemView::GetStaticData");
 		
 		StartPrepSDKCall(SDKCall_Raw);
 		PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "AI_CriteriaSet::FindCriterionIndex");
@@ -97,18 +105,18 @@ public void OnPluginStart()
 
 public void OnMapStart()
 {
-	g_IsMapRunning = true;
+	g_bIsMapRunning = true;
 }
 
 public void OnMapEnd()
 {
-	g_IsMapRunning = false;
+	g_bIsMapRunning = false;
 }
 
 public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 {
-	// Force-enable Halloween or Full Moon if our code requests it
-	if (g_ForceHalloweenOrFullMoonActive && holiday == TFHoliday_HalloweenOrFullMoon)
+	// Force-enable Halloween / Full Moon if our code requests it
+	if (g_bForceHalloweenOrFullMoonActive && holiday == TFHoliday_HalloweenOrFullMoon)
 	{
 		result = true;
 		return Plugin_Changed;
@@ -135,42 +143,49 @@ public void OnClientPutInServer(int client)
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
-	if (!g_IsMapRunning)
+	if (!g_bIsMapRunning)
 		return;
 	
 	if (!strncmp(classname, "item_healthkit_", 15))
 		SDKHook(entity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
 }
 
-public MRESReturn DHookCallback_GetStaticData_Post(DHookReturn ret)
+public MRESReturn DHookCallback_ItemIsAllowed_Pre(int player, DHookReturn ret, DHookParam param)
 {
-	// CEconItemDefinition
-	Address itemDef = view_as<Address>(ret.Value);
+	// CTFPlayer::ItemIsAllowed is a good place to remove holiday restrictions,
+	// since every loadout item of a player passes through it at least once.
 	
-	// Set m_pszHolidayRestriction to NULL to remove any holiday restrictions on econ items
-	StoreToAddress(itemDef + view_as<Address>(g_OffsetHolidayRestriction), NULL, NumberType_Int32);
+	Address pItem = param.Get(1);	// CEconItemView
+	if (pItem && GetStaticData(pItem))
+	{
+		Address pData = GetStaticData(pItem);	// CEconItemDefinition
+		if (pData)
+		{
+			// Remove holiday restriction from econ item definition
+			Address pszHolidayRestriction = pData + view_as<Address>(g_OffsHolidayRestriction);
+			StoreToAddress(pszHolidayRestriction, NULL, NumberType_Int8);
+		}
+	}
 	
 	return MRES_Ignored;
 }
 
 public MRESReturn DHookCallback_ModifyOrAppendCriteria_Pre(int entity, DHookParam param)
 {
-	// Allow users of Halloween costume sets to use custom voice lines
-	g_ForceHalloweenOrFullMoonActive = true;
+	// Enable voice lines of Halloween custome sets
+	g_bForceHalloweenOrFullMoonActive = true;
 	
 	return MRES_Ignored;
 }
 
 public MRESReturn DHookCallback_ModifyOrAppendCriteria_Post(int entity, DHookParam param)
 {
-	g_ForceHalloweenOrFullMoonActive = false;
+	g_bForceHalloweenOrFullMoonActive = false;
 	
-	// Suppress the Thriller taunt unless it's Halloween or the Thriller condition was added
+	// Suppress the Thriller taunt unless it's Halloween or the player is in the Thriller condition
 	if (!TF2_IsHolidayActive(TFHoliday_Halloween) && !TF2_IsPlayerInCondition(entity, TFCond_HalloweenThriller))
 	{
-		// AI_CriteriaSet
-		int criteriaSet = param.Get(1);
-		
+		int criteriaSet = param.Get(1);	// AI_CriteriaSet
 		if (FindCriterionIndex(criteriaSet, "IsHalloweenTaunt") != -1)
 			RemoveCriteria(criteriaSet, "IsHalloweenTaunt");
 	}
@@ -180,7 +195,7 @@ public MRESReturn DHookCallback_ModifyOrAppendCriteria_Post(int entity, DHookPar
 
 public void SDKHookCB_HealthKit_SpawnPost(int entity)
 {
-	// Force non-holiday model index unless it's actually Halloween or Full Moon
+	// Force non-holiday model index unless it's Halloween / Full Moon
 	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
 		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
 }
@@ -210,6 +225,14 @@ void ReplicateHalloweenOrFullMoonToClient(int client)
 	char value[8];
 	if (IntToString(view_as<int>(TFHoliday_HalloweenOrFullMoon), value, sizeof(value)))
 		tf_forced_holiday.ReplicateToClient(client, value);
+}
+
+Address GetStaticData(Address entity)
+{
+	if (g_SDKCallGetStaticData)
+		return SDKCall(g_SDKCallGetStaticData, entity);
+	
+	return Address_Null;
 }
 
 int FindCriterionIndex(int criteriaSet, const char[] criteria)

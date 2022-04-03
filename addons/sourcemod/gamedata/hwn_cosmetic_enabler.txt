@@ -21,6 +21,12 @@
 	{
 		"Signatures"
 		{
+			"CTFPlayer::ItemIsAllowed"
+			{
+				"library"	"server"
+				"linux"		"@_ZN9CTFPlayer13ItemIsAllowedEP13CEconItemView"
+				"windows"	"\x55\x8B\xEC\x53\x56\x8B\x75\x08\x8B\xD9\x85\xF6\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCE"
+			}
 			"CEconItemView::GetStaticData"
 			{
 				"library"	"server"
@@ -55,12 +61,19 @@
 		}
 		"Functions"
 		{
-			"CEconItemView::GetStaticData"
+			"CTFPlayer::ItemIsAllowed"
 			{
-				"signature"	"CEconItemView::GetStaticData"
+				"signature"	"CTFPlayer::ItemIsAllowed"
 				"callconv"	"thiscall"
-				"return"	"int"
-				"this"		"ignore"
+				"return"	"bool"
+				"this"		"entity"
+				"arguments"
+				{
+					"pItem"
+					{
+						"type"	"int"
+					}
+				}
 			}
 			"CBaseEntity::ModifyOrAppendCriteria"
 			{
