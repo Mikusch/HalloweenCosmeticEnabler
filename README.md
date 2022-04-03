@@ -1,4 +1,4 @@
-## [TF2] Halloween Cosmetic Enabler
+# [TF2] Halloween Cosmetic Enabler
 
 This is a plugin that allows players to equip cosmetics with a Halloween / Full Moon restriction all year around.
 

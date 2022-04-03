@@ -112,10 +112,10 @@ public void OnClientPutInServer(int client)
 	if (g_DHookModifyOrAppendCriteria)
 	{
 		if (g_DHookModifyOrAppendCriteria.HookEntity(Hook_Pre, client, DHookCallback_ModifyOrAppendCriteria_Pre) == INVALID_HOOK_ID)
-			LogError("Failed to hook entity %d for pre virtual hook CBaseEntity::ModifyOrAppendCriteria");
+			LogError("Failed to hook entity %d for pre virtual hook CBaseEntity::ModifyOrAppendCriteria", client);
 		
 		if (g_DHookModifyOrAppendCriteria.HookEntity(Hook_Post, client, DHookCallback_ModifyOrAppendCriteria_Post) == INVALID_HOOK_ID)
-			LogError("Failed to hook entity %d for post virtual hook CBaseEntity::ModifyOrAppendCriteria");
+			LogError("Failed to hook entity %d for post virtual hook CBaseEntity::ModifyOrAppendCriteria", client);
 	}
 	
 	if (!IsFakeClient(client))
