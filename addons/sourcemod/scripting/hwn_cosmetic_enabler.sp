@@ -156,7 +156,7 @@ public MRESReturn DHookCallback_ItemIsAllowed_Pre(int player, DHookReturn ret, D
 	// since every loadout item of a player passes through it at least once.
 	
 	Address pItem = param.Get(1);	// CEconItemView
-	if (pItem && GetStaticData(pItem))
+	if (pItem)
 	{
 		Address pData = GetStaticData(pItem);	// CEconItemDefinition
 		if (pData)
