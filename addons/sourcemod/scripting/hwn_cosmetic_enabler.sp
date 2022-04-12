@@ -20,8 +20,11 @@
 #include <tf2_stocks>
 #include <dhooks>
 
+ConVar tf_enable_halloween_cosmetics;
 ConVar tf_forced_holiday;
+DynamicDetour g_hDetourInputFire;
 
+bool g_bIsEnabled;
 bool g_bIsMapRunning;
 bool g_bNoForcedHoliday;
 
@@ -36,39 +39,25 @@ public Plugin myinfo =
 
 public void OnPluginStart()
 {
-	tf_forced_holiday = FindConVar("tf_forced_holiday");
-	tf_forced_holiday.AddChangeHook(ConVarChanged_ForcedHoliday);
+	tf_enable_halloween_cosmetics = CreateConVar("tf_enable_halloween_cosmetics", "1", "Whether to enable cosmetics and effects with a Halloween / Full Moon restriction.");
+	tf_enable_halloween_cosmetics.AddChangeHook(ConVarChanged_EnableHalloweenCosmetics);
 	
-	GameData gamedata = new GameData("hwn_cosmetic_enabler");
-	if (gamedata)
+	tf_forced_holiday = FindConVar("tf_forced_holiday");
+	
+	GameData hGameData = new GameData("hwn_cosmetic_enabler");
+	if (hGameData)
 	{
-		DynamicDetour detour = DynamicDetour.FromConf(gamedata, "CLogicOnHoliday::InputFire");
-		if (detour)
-		{
-			if (!detour.Enable(Hook_Pre, DHookCallback_InputFire_Pre))
-			{
-				LogError("Failed to enable pre detour for CLogicOnHoliday::InputFire");
-			}
-			
-			if (!detour.Enable(Hook_Post, DHookCallback_InputFire_Post))
-			{
-				LogError("Failed to enable post detour for CLogicOnHoliday::InputFire");
-			}
-		}
-		else
-		{
+		g_hDetourInputFire = DynamicDetour.FromConf(hGameData, "CLogicOnHoliday::InputFire");
+		if (!g_hDetourInputFire)
 			LogError("Failed to setup detour for CTFPlayer::InputFire");
-		}
 		
-		delete gamedata;
+		delete hGameData;
 	}
 	
-	for (int client = 1; client <= MaxClients; client++)
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
-		if (IsClientInGame(client))
-		{
-			OnClientPutInServer(client);
-		}
+		if (IsClientInGame(iClient))
+			OnClientPutInServer(iClient);
 	}
 }
 
@@ -82,12 +71,21 @@ public void OnMapEnd()
 	g_bIsMapRunning = false;
 }
 
-public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
+public void OnConfigsExecuted()
 {
+	if (g_bIsEnabled != tf_enable_halloween_cosmetics.BoolValue)
+		TogglePlugin(tf_enable_halloween_cosmetics.BoolValue);
+}
+
+public Action TF2_OnIsHolidayActive(TFHoliday eHoliday, bool &bResult)
+{
+	if (!g_bIsEnabled)
+		return Plugin_Continue;
+	
 	// Force-enable Halloween at all times unless we specifically request not to
-	if (holiday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
+	if (eHoliday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
 	{
-		result = true;
+		bResult = true;
 		return Plugin_Changed;
 	}
 	
@@ -95,59 +93,31 @@ public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 	return Plugin_Continue;
 }
 
-public void OnClientPutInServer(int client)
+public void OnClientPutInServer(int iClient)
 {
-	if (!IsFakeClient(client))
-	{
-		ReplicateHolidayToClient(client, TFHoliday_HalloweenOrFullMoon);
-	}
-}
-
-public void OnEntityCreated(int entity, const char[] classname)
-{
-	if (!g_bIsMapRunning)
-	{
+	if (!g_bIsEnabled)
 		return;
-	}
 	
-	if (!strncmp(classname, "item_healthkit_", 15))
-	{
-		SDKHook(entity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
-	}
+	if (!IsFakeClient(iClient))
+		ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
 }
 
-public MRESReturn DHookCallback_InputFire_Pre(int entity, DHookParam param)
+public void OnEntityCreated(int iEntity, const char[] szClassname)
 {
-	// Prevent tf_logic_on_holiday from assuming it's always Halloween
-	g_bNoForcedHoliday = true;
+	if (!g_bIsEnabled)
+		return;
 	
-	return MRES_Ignored;
+	if (!g_bIsMapRunning)
+		return;
+	
+	if (!strncmp(szClassname, "item_healthkit_", 15))
+		SDKHook(iEntity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
 }
 
-public MRESReturn DHookCallback_InputFire_Post(int entity, DHookParam param)
-{
-	g_bNoForcedHoliday = false;
-	
-	return MRES_Ignored;
-}
-
-public void SDKHookCB_HealthKit_SpawnPost(int entity)
-{
-	g_bNoForcedHoliday = true;
-	
-	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
-	{
-		// Force normal non-holiday health kit model
-		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
-	}
-	
-	g_bNoForcedHoliday = false;
-}
-
-public void ConVarChanged_ForcedHoliday(ConVar convar, const char[] oldValue, const char[] newValue)
+public void ConVarChanged_ForcedHoliday(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
 {
 	// If tf_forced_holiday was changed, replicate the desired value back to each client
-	TFHoliday holiday = view_as<TFHoliday>(convar.IntValue);
+	TFHoliday holiday = view_as<TFHoliday>(hConVar.IntValue);
 	if (holiday != TFHoliday_HalloweenOrFullMoon)
 	{
 		// Allow clients to react to the initial change first
@@ -155,26 +125,105 @@ public void ConVarChanged_ForcedHoliday(ConVar convar, const char[] oldValue, co
 	}
 }
 
-public void RequestFrameCallback_ReplicateForcedHoliday(TFHoliday holiday)
+public void ConVarChanged_EnableHalloweenCosmetics(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
 {
-	for (int client = 1; client <= MaxClients; client++)
+	if (g_bIsEnabled != hConVar.BoolValue)
+		TogglePlugin(hConVar.BoolValue);
+}
+
+public MRESReturn DHookCallback_InputFire_Pre(int iEntity, DHookParam hParam)
+{
+	// Prevent tf_logic_on_holiday from assuming it's always Halloween
+	g_bNoForcedHoliday = true;
+	
+	return MRES_Ignored;
+}
+
+public MRESReturn DHookCallback_InputFire_Post(int iEntity, DHookParam hParam)
+{
+	g_bNoForcedHoliday = false;
+	
+	return MRES_Ignored;
+}
+
+public void SDKHookCB_HealthKit_SpawnPost(int iEntity)
+{
+	g_bNoForcedHoliday = true;
+	
+	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
 	{
-		if (!IsClientInGame(client))
+		// Force normal non-holiday health kit model
+		SetEntProp(iEntity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
+	}
+	
+	g_bNoForcedHoliday = false;
+}
+
+public void RequestFrameCallback_ReplicateForcedHoliday(TFHoliday eHoliday)
+{
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if (!IsClientInGame(iClient))
 			continue;
 		
-		if (IsFakeClient(client))
+		if (IsFakeClient(iClient))
 			continue;
 		
-		ReplicateHolidayToClient(client, holiday);
+		ReplicateHolidayToClient(iClient, eHoliday);
 	}
 }
 
-void ReplicateHolidayToClient(int client, TFHoliday holiday)
+void TogglePlugin(bool bEnable)
 {
-	// Make client code think that it is a different holiday
-	char strHoliday[8];
-	if (IntToString(view_as<int>(holiday), strHoliday, sizeof(strHoliday)))
+	g_bIsEnabled = bEnable;
+	
+	if (bEnable)
 	{
-		tf_forced_holiday.ReplicateToClient(client, strHoliday);
+		tf_forced_holiday.AddChangeHook(ConVarChanged_ForcedHoliday);
+		
+		if (g_hDetourInputFire)
+		{
+			g_hDetourInputFire.Enable(Hook_Pre, DHookCallback_InputFire_Pre);
+			g_hDetourInputFire.Enable(Hook_Post, DHookCallback_InputFire_Post);
+		}
+	}
+	else
+	{
+		tf_forced_holiday.RemoveChangeHook(ConVarChanged_ForcedHoliday);
+		
+		if (g_hDetourInputFire)
+		{
+			g_hDetourInputFire.Disable(Hook_Pre, DHookCallback_InputFire_Pre);
+			g_hDetourInputFire.Disable(Hook_Post, DHookCallback_InputFire_Post);
+		}
+	}
+	
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if (!IsClientInGame(iClient))
+			continue;
+		
+		if (IsFakeClient(iClient))
+			continue;
+		
+		if (bEnable)
+		{
+			ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
+		}
+		else
+		{
+			TFHoliday eHoliday = view_as<TFHoliday>(tf_forced_holiday.IntValue);
+			ReplicateHolidayToClient(iClient, eHoliday);
+		}
+	}
+}
+
+void ReplicateHolidayToClient(int iClient, TFHoliday eHoliday)
+{
+	char szHoliday[20];
+	if (IntToString(view_as<int>(eHoliday), szHoliday, sizeof(szHoliday)))
+	{
+		// Make client code think that it is a different holiday
+		tf_forced_holiday.ReplicateToClient(iClient, szHoliday);
 	}
 }
