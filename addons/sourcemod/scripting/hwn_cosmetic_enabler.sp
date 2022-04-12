@@ -46,10 +46,14 @@ public void OnPluginStart()
 		if (detour)
 		{
 			if (!detour.Enable(Hook_Pre, DHookCallback_InputFire_Pre))
+			{
 				LogError("Failed to enable pre detour for CLogicOnHoliday::InputFire");
+			}
 			
 			if (!detour.Enable(Hook_Post, DHookCallback_InputFire_Post))
+			{
 				LogError("Failed to enable post detour for CLogicOnHoliday::InputFire");
+			}
 		}
 		else
 		{
@@ -62,7 +66,9 @@ public void OnPluginStart()
 	for (int client = 1; client <= MaxClients; client++)
 	{
 		if (IsClientInGame(client))
+		{
 			OnClientPutInServer(client);
+		}
 	}
 }
 
@@ -78,7 +84,7 @@ public void OnMapEnd()
 
 public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 {
-	// Force-enable Halloween at all times
+	// Force-enable Halloween at all times unless we specifically request not to
 	if (holiday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
 	{
 		result = true;
@@ -92,16 +98,22 @@ public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 public void OnClientPutInServer(int client)
 {
 	if (!IsFakeClient(client))
+	{
 		ReplicateHolidayToClient(client, TFHoliday_HalloweenOrFullMoon);
+	}
 }
 
 public void OnEntityCreated(int entity, const char[] classname)
 {
 	if (!g_bIsMapRunning)
+	{
 		return;
+	}
 	
 	if (!strncmp(classname, "item_healthkit_", 15))
+	{
 		SDKHook(entity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
+	}
 }
 
 public MRESReturn DHookCallback_InputFire_Pre(int entity, DHookParam param)
@@ -121,34 +133,48 @@ public MRESReturn DHookCallback_InputFire_Post(int entity, DHookParam param)
 
 public void SDKHookCB_HealthKit_SpawnPost(int entity)
 {
-	// Force non-holiday model index unless it's Halloween or Full Moon
+	g_bNoForcedHoliday = true;
+	
 	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
+	{
+		// Force normal non-holiday health kit model
 		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
+	}
+	
+	g_bNoForcedHoliday = false;
 }
 
 public void ConVarChanged_ForcedHoliday(ConVar convar, const char[] oldValue, const char[] newValue)
 {
 	// If tf_forced_holiday was changed, replicate the desired value back to each client
-	if (view_as<TFHoliday>(convar.IntValue) != TFHoliday_HalloweenOrFullMoon)
+	TFHoliday holiday = view_as<TFHoliday>(convar.IntValue);
+	if (holiday != TFHoliday_HalloweenOrFullMoon)
 	{
-		// Delay by a frame to allow clients to react to the initial change first
-		RequestFrame(RequestFrameCallback_ReplicateForcedHoliday);
+		// Allow clients to react to the initial change first
+		RequestFrame(RequestFrameCallback_ReplicateForcedHoliday, TFHoliday_HalloweenOrFullMoon);
 	}
 }
 
-public void RequestFrameCallback_ReplicateForcedHoliday()
+public void RequestFrameCallback_ReplicateForcedHoliday(TFHoliday holiday)
 {
 	for (int client = 1; client <= MaxClients; client++)
 	{
-		if (IsClientInGame(client) && !IsFakeClient(client))
-			ReplicateHolidayToClient(client, TFHoliday_HalloweenOrFullMoon);
+		if (!IsClientInGame(client))
+			continue;
+		
+		if (IsFakeClient(client))
+			continue;
+		
+		ReplicateHolidayToClient(client, holiday);
 	}
 }
 
 void ReplicateHolidayToClient(int client, TFHoliday holiday)
 {
-	// Replicate the value of tf_forced_holiday to the client to allow spells to work
-	char value[8];
-	if (IntToString(view_as<int>(holiday), value, sizeof(value)))
-		tf_forced_holiday.ReplicateToClient(client, value);
+	// Make client code think that it is a different holiday
+	char strHoliday[8];
+	if (IntToString(view_as<int>(holiday), strHoliday, sizeof(strHoliday)))
+	{
+		tf_forced_holiday.ReplicateToClient(client, strHoliday);
+	}
 }
