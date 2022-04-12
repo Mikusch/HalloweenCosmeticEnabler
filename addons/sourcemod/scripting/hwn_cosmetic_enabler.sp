@@ -49,7 +49,7 @@ public void OnPluginStart()
 	{
 		g_hDetourInputFire = DynamicDetour.FromConf(hGameData, "CLogicOnHoliday::InputFire");
 		if (!g_hDetourInputFire)
-			LogError("Failed to setup detour for CTFPlayer::InputFire");
+			LogError("Failed to setup detour for CLogicOnHoliday::InputFire");
 		
 		delete hGameData;
 	}
