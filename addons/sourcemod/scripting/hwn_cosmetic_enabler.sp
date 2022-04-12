@@ -17,89 +17,47 @@
 
 #include <sourcemod>
 #include <sdkhooks>
-#include <dhooks>
 #include <tf2_stocks>
+#include <dhooks>
 
-#define NULL	0
-
+ConVar tf_enable_halloween_cosmetics;
 ConVar tf_forced_holiday;
+DynamicDetour g_hDetourInputFire;
 
-int g_OffsHolidayRestriction;
-
-DynamicDetour g_DHookItemIsAllowed;
-DynamicHook g_DHookModifyOrAppendCriteria;
-Handle g_SDKCallGetStaticData;
-Handle g_SDKCallFindCriterionIndex;
-Handle g_SDKCallRemoveCriteria;
-
+bool g_bIsEnabled;
 bool g_bIsMapRunning;
-bool g_bForceHalloweenOrFullMoonActive;
+bool g_bNoForcedHoliday;
 
 public Plugin myinfo =
 {
 	name = "[TF2] Halloween Cosmetic Enabler",
 	author = "Mikusch",
 	description = "Enables Halloween cosmetics and spells regardless of current holiday",
-	version = "1.1.0",
+	version = "1.2.0",
 	url = "https://github.com/Mikusch/HalloweenCosmeticEnabler"
 }
 
 public void OnPluginStart()
 {
-	tf_forced_holiday = FindConVar("tf_forced_holiday");
-	tf_forced_holiday.AddChangeHook(ConVarChanged_ForcedHoliday);
+	tf_enable_halloween_cosmetics = CreateConVar("tf_enable_halloween_cosmetics", "1", "Whether to enable cosmetics and effects with a Halloween / Full Moon restriction.");
+	tf_enable_halloween_cosmetics.AddChangeHook(ConVarChanged_EnableHalloweenCosmetics);
 	
-	GameData gamedata = new GameData("hwn_cosmetic_enabler");
-	if (gamedata)
+	tf_forced_holiday = FindConVar("tf_forced_holiday");
+	
+	GameData hGameData = new GameData("hwn_cosmetic_enabler");
+	if (hGameData)
 	{
-		g_OffsHolidayRestriction = gamedata.GetOffset("CEconItemDefinition::m_pszHolidayRestriction");
-		if (!g_OffsHolidayRestriction)
-			LogError("Failed to find offset for CEconItemDefinition::m_pszHolidayRestriction");
+		g_hDetourInputFire = DynamicDetour.FromConf(hGameData, "CLogicOnHoliday::InputFire");
+		if (!g_hDetourInputFire)
+			LogError("Failed to setup detour for CTFPlayer::InputFire");
 		
-		g_DHookItemIsAllowed = DynamicDetour.FromConf(gamedata, "CTFPlayer::ItemIsAllowed");
-		if (g_DHookItemIsAllowed)
-		{
-			if (!g_DHookItemIsAllowed.Enable(Hook_Pre, DHookCallback_ItemIsAllowed_Pre))
-				LogError("Failed to enable pre detour for CTFPlayer::ItemIsAllowed");
-		}
-		else
-		{
-			LogError("Failed to setup detour for CTFPlayer::ItemIsAllowed");
-		}
-		
-		g_DHookModifyOrAppendCriteria = DynamicHook.FromConf(gamedata, "CBaseEntity::ModifyOrAppendCriteria");
-		if (!g_DHookModifyOrAppendCriteria)
-			LogError("Failed to find offset for CBaseEntity::ModifyOrAppendCriteria");
-		
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "CEconItemView::GetStaticData");
-		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-		g_SDKCallGetStaticData = EndPrepSDKCall();
-		if (!g_SDKCallGetStaticData)
-			LogError("Failed to create SDKCall: CEconItemView::GetStaticData");
-		
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "AI_CriteriaSet::FindCriterionIndex");
-		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-		PrepSDKCall_SetReturnInfo(SDKType_PlainOldData, SDKPass_Plain);
-		g_SDKCallFindCriterionIndex = EndPrepSDKCall();
-		if (!g_SDKCallFindCriterionIndex)
-			LogError("Failed to create SDKCall: AI_CriteriaSet::FindCriterionIndex");
-		
-		StartPrepSDKCall(SDKCall_Raw);
-		PrepSDKCall_SetFromConf(gamedata, SDKConf_Signature, "AI_CriteriaSet::RemoveCriteria");
-		PrepSDKCall_AddParameter(SDKType_String, SDKPass_Pointer);
-		g_SDKCallRemoveCriteria = EndPrepSDKCall();
-		if (!g_SDKCallRemoveCriteria)
-			LogError("Failed to create SDKCall: AI_CriteriaSet::RemoveCriteria");
-		
-		delete gamedata;
+		delete hGameData;
 	}
 	
-	for (int client = 1; client <= MaxClients; client++)
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
-		if (IsClientInGame(client))
-			OnClientPutInServer(client);
+		if (IsClientInGame(iClient))
+			OnClientPutInServer(iClient);
 	}
 }
 
@@ -113,12 +71,21 @@ public void OnMapEnd()
 	g_bIsMapRunning = false;
 }
 
-public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
+public void OnConfigsExecuted()
 {
-	// Force-enable Halloween / Full Moon if our code requests it
-	if (g_bForceHalloweenOrFullMoonActive && holiday == TFHoliday_HalloweenOrFullMoon)
+	if (g_bIsEnabled != tf_enable_halloween_cosmetics.BoolValue)
+		TogglePlugin(tf_enable_halloween_cosmetics.BoolValue);
+}
+
+public Action TF2_OnIsHolidayActive(TFHoliday eHoliday, bool &bResult)
+{
+	if (!g_bIsEnabled)
+		return Plugin_Continue;
+	
+	// Force-enable Halloween at all times unless we specifically request not to
+	if (eHoliday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
 	{
-		result = true;
+		bResult = true;
 		return Plugin_Changed;
 	}
 	
@@ -126,125 +93,137 @@ public Action TF2_OnIsHolidayActive(TFHoliday holiday, bool &result)
 	return Plugin_Continue;
 }
 
-public void OnClientPutInServer(int client)
+public void OnClientPutInServer(int iClient)
 {
-	if (g_DHookModifyOrAppendCriteria)
-	{
-		if (g_DHookModifyOrAppendCriteria.HookEntity(Hook_Pre, client, DHookCallback_ModifyOrAppendCriteria_Pre) == INVALID_HOOK_ID)
-			LogError("Failed to hook entity %d for pre virtual hook CBaseEntity::ModifyOrAppendCriteria", client);
-		
-		if (g_DHookModifyOrAppendCriteria.HookEntity(Hook_Post, client, DHookCallback_ModifyOrAppendCriteria_Post) == INVALID_HOOK_ID)
-			LogError("Failed to hook entity %d for post virtual hook CBaseEntity::ModifyOrAppendCriteria", client);
-	}
+	if (!g_bIsEnabled)
+		return;
 	
-	if (!IsFakeClient(client))
-		ReplicateHalloweenOrFullMoonToClient(client);
+	if (!IsFakeClient(iClient))
+		ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
 }
 
-public void OnEntityCreated(int entity, const char[] classname)
+public void OnEntityCreated(int iEntity, const char[] szClassname)
 {
+	if (!g_bIsEnabled)
+		return;
+	
 	if (!g_bIsMapRunning)
 		return;
 	
-	if (!strncmp(classname, "item_healthkit_", 15))
-		SDKHook(entity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
+	if (!strncmp(szClassname, "item_healthkit_", 15))
+		SDKHook(iEntity, SDKHook_SpawnPost, SDKHookCB_HealthKit_SpawnPost);
 }
 
-public MRESReturn DHookCallback_ItemIsAllowed_Pre(int player, DHookReturn ret, DHookParam param)
+public void ConVarChanged_ForcedHoliday(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
 {
-	// CTFPlayer::ItemIsAllowed is a good place to remove holiday restrictions,
-	// since every loadout item of a player passes through it at least once.
-	
-	Address pItem = param.Get(1);	// CEconItemView
-	if (pItem)
+	// If tf_forced_holiday was changed, replicate the desired value back to each client
+	TFHoliday holiday = view_as<TFHoliday>(hConVar.IntValue);
+	if (holiday != TFHoliday_HalloweenOrFullMoon)
 	{
-		Address pData = GetStaticData(pItem);	// CEconItemDefinition
-		if (pData)
+		// Allow clients to react to the initial change first
+		RequestFrame(RequestFrameCallback_ReplicateForcedHoliday, TFHoliday_HalloweenOrFullMoon);
+	}
+}
+
+public void ConVarChanged_EnableHalloweenCosmetics(ConVar hConVar, const char[] szOldValue, const char[] szNewValue)
+{
+	if (g_bIsEnabled != hConVar.BoolValue)
+		TogglePlugin(hConVar.BoolValue);
+}
+
+public MRESReturn DHookCallback_InputFire_Pre(int iEntity, DHookParam hParam)
+{
+	// Prevent tf_logic_on_holiday from assuming it's always Halloween
+	g_bNoForcedHoliday = true;
+	
+	return MRES_Ignored;
+}
+
+public MRESReturn DHookCallback_InputFire_Post(int iEntity, DHookParam hParam)
+{
+	g_bNoForcedHoliday = false;
+	
+	return MRES_Ignored;
+}
+
+public void SDKHookCB_HealthKit_SpawnPost(int iEntity)
+{
+	g_bNoForcedHoliday = true;
+	
+	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
+	{
+		// Force normal non-holiday health kit model
+		SetEntProp(iEntity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
+	}
+	
+	g_bNoForcedHoliday = false;
+}
+
+public void RequestFrameCallback_ReplicateForcedHoliday(TFHoliday eHoliday)
+{
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
+	{
+		if (!IsClientInGame(iClient))
+			continue;
+		
+		if (IsFakeClient(iClient))
+			continue;
+		
+		ReplicateHolidayToClient(iClient, eHoliday);
+	}
+}
+
+void TogglePlugin(bool bEnable)
+{
+	g_bIsEnabled = bEnable;
+	
+	if (bEnable)
+	{
+		tf_forced_holiday.AddChangeHook(ConVarChanged_ForcedHoliday);
+		
+		if (g_hDetourInputFire)
 		{
-			// Remove holiday restriction from econ item definition
-			Address pszHolidayRestriction = pData + view_as<Address>(g_OffsHolidayRestriction);
-			StoreToAddress(pszHolidayRestriction, NULL, NumberType_Int8);
+			g_hDetourInputFire.Enable(Hook_Pre, DHookCallback_InputFire_Pre);
+			g_hDetourInputFire.Enable(Hook_Post, DHookCallback_InputFire_Post);
+		}
+	}
+	else
+	{
+		tf_forced_holiday.RemoveChangeHook(ConVarChanged_ForcedHoliday);
+		
+		if (g_hDetourInputFire)
+		{
+			g_hDetourInputFire.Disable(Hook_Pre, DHookCallback_InputFire_Pre);
+			g_hDetourInputFire.Disable(Hook_Post, DHookCallback_InputFire_Post);
 		}
 	}
 	
-	return MRES_Ignored;
-}
-
-public MRESReturn DHookCallback_ModifyOrAppendCriteria_Pre(int entity, DHookParam param)
-{
-	// Enable voice lines of Halloween custome sets
-	g_bForceHalloweenOrFullMoonActive = true;
-	
-	return MRES_Ignored;
-}
-
-public MRESReturn DHookCallback_ModifyOrAppendCriteria_Post(int entity, DHookParam param)
-{
-	g_bForceHalloweenOrFullMoonActive = false;
-	
-	// Suppress the Thriller taunt unless it's Halloween or the player is in the Thriller condition
-	if (!TF2_IsHolidayActive(TFHoliday_Halloween) && !TF2_IsPlayerInCondition(entity, TFCond_HalloweenThriller))
+	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
-		int criteriaSet = param.Get(1);	// AI_CriteriaSet
-		if (FindCriterionIndex(criteriaSet, "IsHalloweenTaunt") != -1)
-			RemoveCriteria(criteriaSet, "IsHalloweenTaunt");
-	}
-	
-	return MRES_Ignored;
-}
-
-public void SDKHookCB_HealthKit_SpawnPost(int entity)
-{
-	// Force non-holiday model index unless it's Halloween / Full Moon
-	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
-		SetEntProp(entity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
-}
-
-public void ConVarChanged_ForcedHoliday(ConVar convar, const char[] oldValue, const char[] newValue)
-{
-	// If tf_forced_holiday was changed, replicate the desired value back to each client
-	if (view_as<TFHoliday>(convar.IntValue) != TFHoliday_HalloweenOrFullMoon)
-	{
-		// Delay by a frame to allow clients to react to the initial change first
-		RequestFrame(RequestFrameCallback_ReplicateForcedHoliday);
+		if (!IsClientInGame(iClient))
+			continue;
+		
+		if (IsFakeClient(iClient))
+			continue;
+		
+		if (bEnable)
+		{
+			ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
+		}
+		else
+		{
+			TFHoliday eHoliday = view_as<TFHoliday>(tf_forced_holiday.IntValue);
+			ReplicateHolidayToClient(iClient, eHoliday);
+		}
 	}
 }
 
-public void RequestFrameCallback_ReplicateForcedHoliday()
+void ReplicateHolidayToClient(int iClient, TFHoliday eHoliday)
 {
-	for (int client = 1; client <= MaxClients; client++)
+	char szHoliday[20];
+	if (IntToString(view_as<int>(eHoliday), szHoliday, sizeof(szHoliday)))
 	{
-		if (IsClientInGame(client) && !IsFakeClient(client))
-			ReplicateHalloweenOrFullMoonToClient(client);
+		// Make client code think that it is a different holiday
+		tf_forced_holiday.ReplicateToClient(iClient, szHoliday);
 	}
-}
-
-void ReplicateHalloweenOrFullMoonToClient(int client)
-{
-	// Replicate the value of tf_forced_holiday to the client to allow spells to work
-	char value[8];
-	if (IntToString(view_as<int>(TFHoliday_HalloweenOrFullMoon), value, sizeof(value)))
-		tf_forced_holiday.ReplicateToClient(client, value);
-}
-
-Address GetStaticData(Address entity)
-{
-	if (g_SDKCallGetStaticData)
-		return SDKCall(g_SDKCallGetStaticData, entity);
-	
-	return Address_Null;
-}
-
-int FindCriterionIndex(int criteriaSet, const char[] criteria)
-{
-	if (g_SDKCallFindCriterionIndex)
-		return SDKCall(g_SDKCallFindCriterionIndex, criteriaSet, criteria);
-	
-	return -1;
-}
-
-void RemoveCriteria(int criteriaSet, const char[] criteria)
-{
-	if (g_SDKCallRemoveCriteria)
-		SDKCall(g_SDKCallRemoveCriteria, criteriaSet, criteria);
 }

@@ -21,71 +21,26 @@
 	{
 		"Signatures"
 		{
-			"CTFPlayer::ItemIsAllowed"
+			"CLogicOnHoliday::InputFire"
 			{
 				"library"	"server"
-				"linux"		"@_ZN9CTFPlayer13ItemIsAllowedEP13CEconItemView"
-				"windows"	"\x55\x8B\xEC\x53\x56\x8B\x75\x08\x8B\xD9\x85\xF6\x0F\x84\x2A\x2A\x2A\x2A\x8B\xCE"
-			}
-			"CEconItemView::GetStaticData"
-			{
-				"library"	"server"
-				"linux"		"@_ZNK13CEconItemView13GetStaticDataEv"
-				"windows"	"\x0F\xB7\x41\x04\x50\xE8\x2A\x2A\x2A\x2A\x8B\xC8\xE8\x2A\x2A\x2A\x2A\x6A\x00\x68\x2A\x2A\x2A\x2A\x68\x2A\x2A\x2A\x2A\x6A\x00\x50\xE8\x2A\x2A\x2A\x2A\x83\xC4\x14\xC3"
-			}
-			"AI_CriteriaSet::FindCriterionIndex"
-			{
-				"library"	"server"
-				"linux"		"@_ZNK14AI_CriteriaSet18FindCriterionIndexEPKc"
-				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\xFF\x75\x08"
-			}
-			"AI_CriteriaSet::RemoveCriteria"
-			{
-				"library"	"server"
-				"linux"		"@_ZN14AI_CriteriaSet14RemoveCriteriaEPKc"
-				"windows"	"\x55\x8B\xEC\x83\xEC\x48\x56\x57\xFF\x75\x08"
-			}
-		}
-		"Offsets"
-		{
-			"CBaseEntity::ModifyOrAppendCriteria"
-			{
-				"linux"		"122"
-				"windows"	"121"
-			}
-			"CEconItemDefinition::m_pszHolidayRestriction"
-			{
-				"linux"		"288"
-				"windows"	"288"
+				"linux"		"@_ZN15CLogicOnHoliday9InputFireER11inputdata_t"
+				"windows"	"\x55\x8B\xEC\x51\x53\x56\x6A\x0B"
 			}
 		}
 		"Functions"
 		{
-			"CTFPlayer::ItemIsAllowed"
+			"CLogicOnHoliday::InputFire"
 			{
-				"signature"	"CTFPlayer::ItemIsAllowed"
+				"signature"	"CLogicOnHoliday::InputFire"
 				"callconv"	"thiscall"
-				"return"	"bool"
-				"this"		"entity"
-				"arguments"
-				{
-					"pItem"
-					{
-						"type"	"int"
-					}
-				}
-			}
-			"CBaseEntity::ModifyOrAppendCriteria"
-			{
-				"offset"	"CBaseEntity::ModifyOrAppendCriteria"
-				"hooktype"	"entity"
 				"return"	"void"
 				"this"		"entity"
 				"arguments"
 				{
-					"criteriaSet"
+					"inputdata_t"
 					{
-						"type"	"int"
+						"type"	"objectptr"
 					}
 				}
 			}
