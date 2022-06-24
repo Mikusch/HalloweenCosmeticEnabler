@@ -36,7 +36,7 @@ public Plugin myinfo =
 	name = "[TF2] Halloween Cosmetic Enabler",
 	author = "Mikusch",
 	description = "Enables Halloween cosmetics and spells regardless of current holiday",
-	version = "1.2.0",
+	version = "1.3.0",
 	url = "https://github.com/Mikusch/HalloweenCosmeticEnabler"
 }
 
