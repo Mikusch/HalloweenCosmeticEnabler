@@ -20,8 +20,6 @@
 #include <tf2_stocks>
 #include <dhooks>
 
-const TFHoliday TFHoliday_None = view_as<TFHoliday>(0);
-
 ConVar tf_enable_halloween_cosmetics;
 ConVar tf_forced_holiday;
 DynamicDetour g_hDetourIsHolidayActive;
@@ -91,15 +89,6 @@ public void OnClientPutInServer(int iClient)
 	
 	if (!IsFakeClient(iClient))
 		ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
-}
-
-public void OnClientDisconnect(int iClient)
-{
-	if (!g_bIsEnabled)
-		return;
-	
-	if (!IsFakeClient(iClient))
-		ReplicateHolidayToClient(iClient, TFHoliday_None);
 }
 
 public void OnEntityCreated(int iEntity, const char[] szClassname)
