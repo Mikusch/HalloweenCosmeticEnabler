@@ -1,4 +1,4 @@
-/*
+/**
  * Copyright (C) 2022  Mikusch
  *
  * This program is free software: you can redistribute it and/or modify
@@ -20,8 +20,11 @@
 #include <tf2_stocks>
 #include <dhooks>
 
+const TFHoliday TFHoliday_None = view_as<TFHoliday>(0);
+
 ConVar tf_enable_halloween_cosmetics;
 ConVar tf_forced_holiday;
+DynamicDetour g_hDetourIsHolidayActive;
 DynamicDetour g_hDetourInputFire;
 
 bool g_bIsEnabled;
@@ -47,9 +50,13 @@ public void OnPluginStart()
 	GameData hGameData = new GameData("hwn_cosmetic_enabler");
 	if (hGameData)
 	{
+		g_hDetourIsHolidayActive = DynamicDetour.FromConf(hGameData, "TF_IsHolidayActive")
+		if (!g_hDetourIsHolidayActive)
+			SetFailState("Failed to setup detour for TF_IsHolidayActive");
+		
 		g_hDetourInputFire = DynamicDetour.FromConf(hGameData, "CLogicOnHoliday::InputFire");
 		if (!g_hDetourInputFire)
-			LogError("Failed to setup detour for CLogicOnHoliday::InputFire");
+			SetFailState("Failed to setup detour for CLogicOnHoliday::InputFire");
 		
 		delete hGameData;
 	}
@@ -77,22 +84,6 @@ public void OnConfigsExecuted()
 		TogglePlugin(tf_enable_halloween_cosmetics.BoolValue);
 }
 
-public Action TF2_OnIsHolidayActive(TFHoliday eHoliday, bool &bResult)
-{
-	if (!g_bIsEnabled)
-		return Plugin_Continue;
-	
-	// Force-enable Halloween at all times unless we specifically request not to
-	if (eHoliday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
-	{
-		bResult = true;
-		return Plugin_Changed;
-	}
-	
-	// Otherwise, let the game determine which holiday is active
-	return Plugin_Continue;
-}
-
 public void OnClientPutInServer(int iClient)
 {
 	if (!g_bIsEnabled)
@@ -100,6 +91,15 @@ public void OnClientPutInServer(int iClient)
 	
 	if (!IsFakeClient(iClient))
 		ReplicateHolidayToClient(iClient, TFHoliday_HalloweenOrFullMoon);
+}
+
+public void OnClientDisconnect(int iClient)
+{
+	if (!g_bIsEnabled)
+		return;
+	
+	if (!IsFakeClient(iClient))
+		ReplicateHolidayToClient(iClient, TFHoliday_None);
 }
 
 public void OnEntityCreated(int iEntity, const char[] szClassname)
@@ -129,6 +129,24 @@ public void ConVarChanged_EnableHalloweenCosmetics(ConVar hConVar, const char[] 
 {
 	if (g_bIsEnabled != hConVar.BoolValue)
 		TogglePlugin(hConVar.BoolValue);
+}
+
+public MRESReturn DHookCallback_IsHolidayActive_Post(DHookReturn hReturn, DHookParam hParam)
+{
+	TFHoliday eHoliday = hParam.Get(1);
+	
+	if (!g_bIsEnabled)
+		return MRES_Ignored;
+	
+	// Force-enable Halloween at all times unless we specifically request not to
+	if (eHoliday == TFHoliday_HalloweenOrFullMoon && !g_bNoForcedHoliday)
+	{
+		hReturn.Value = true;
+		return MRES_Supercede;
+	}
+	
+	// Otherwise, let the game determine which holiday is active
+	return MRES_Ignored;
 }
 
 public MRESReturn DHookCallback_InputFire_Pre(int iEntity, DHookParam hParam)
@@ -181,6 +199,11 @@ void TogglePlugin(bool bEnable)
 	{
 		tf_forced_holiday.AddChangeHook(ConVarChanged_ForcedHoliday);
 		
+		if (g_hDetourIsHolidayActive)
+		{
+			g_hDetourIsHolidayActive.Enable(Hook_Post, DHookCallback_IsHolidayActive_Post);
+		}
+		
 		if (g_hDetourInputFire)
 		{
 			g_hDetourInputFire.Enable(Hook_Pre, DHookCallback_InputFire_Pre);
@@ -190,6 +213,11 @@ void TogglePlugin(bool bEnable)
 	else
 	{
 		tf_forced_holiday.RemoveChangeHook(ConVarChanged_ForcedHoliday);
+		
+		if (g_hDetourIsHolidayActive)
+		{
+			g_hDetourIsHolidayActive.Disable(Hook_Post, DHookCallback_IsHolidayActive_Post);
+		}
 		
 		if (g_hDetourInputFire)
 		{
