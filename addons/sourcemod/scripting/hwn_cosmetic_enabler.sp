@@ -15,6 +15,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+#pragma semicolon 1
+#pragma newdecls required
+
 #include <sourcemod>
 #include <sdkhooks>
 #include <tf2_stocks>
@@ -48,7 +51,7 @@ public void OnPluginStart()
 	GameData hGameData = new GameData("hwn_cosmetic_enabler");
 	if (hGameData)
 	{
-		g_hDetourIsHolidayActive = DynamicDetour.FromConf(hGameData, "TF_IsHolidayActive")
+		g_hDetourIsHolidayActive = DynamicDetour.FromConf(hGameData, "TF_IsHolidayActive");
 		if (!g_hDetourIsHolidayActive)
 			SetFailState("Failed to setup detour for TF_IsHolidayActive");
 		
