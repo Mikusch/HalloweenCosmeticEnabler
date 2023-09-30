@@ -23,6 +23,18 @@
 #include <tf2_stocks>
 #include <dhooks>
 
+#define PLUGIN_VERSION "1.3.1"
+
+enum
+{
+	VISION_MODE_NONE = 0,
+	VISION_MODE_PYRO,
+	VISION_MODE_HALLOWEEN,
+	VISION_MODE_ROME,
+	
+	MAX_VISION_MODES
+};
+
 ConVar tf_enable_halloween_cosmetics;
 ConVar tf_forced_holiday;
 DynamicDetour g_hDetourIsHolidayActive;
@@ -37,7 +49,7 @@ public Plugin myinfo =
 	name = "[TF2] Halloween Cosmetic Enabler",
 	author = "Mikusch",
 	description = "Enables Halloween cosmetics and spells regardless of current holiday",
-	version = "1.3.0",
+	version = PLUGIN_VERSION,
 	url = "https://github.com/Mikusch/HalloweenCosmeticEnabler"
 }
 
@@ -48,19 +60,19 @@ public void OnPluginStart()
 	
 	tf_forced_holiday = FindConVar("tf_forced_holiday");
 	
-	GameData hGameData = new GameData("hwn_cosmetic_enabler");
-	if (hGameData)
-	{
-		g_hDetourIsHolidayActive = DynamicDetour.FromConf(hGameData, "TF_IsHolidayActive");
-		if (!g_hDetourIsHolidayActive)
-			SetFailState("Failed to setup detour for TF_IsHolidayActive");
-		
-		g_hDetourInputFire = DynamicDetour.FromConf(hGameData, "CLogicOnHoliday::InputFire");
-		if (!g_hDetourInputFire)
-			SetFailState("Failed to setup detour for CLogicOnHoliday::InputFire");
-		
-		delete hGameData;
-	}
+	GameData hGameConf = new GameData("hwn_cosmetic_enabler");
+	if (!hGameConf)
+		SetFailState("Failed to find hwn_cosmetic_enabler gamedata");
+	
+	g_hDetourIsHolidayActive = DynamicDetour.FromConf(hGameConf, "TF_IsHolidayActive");
+	if (!g_hDetourIsHolidayActive)
+		SetFailState("Failed to setup detour for TF_IsHolidayActive");
+	
+	g_hDetourInputFire = DynamicDetour.FromConf(hGameConf, "CLogicOnHoliday::InputFire");
+	if (!g_hDetourInputFire)
+		SetFailState("Failed to setup detour for CLogicOnHoliday::InputFire");
+	
+	delete hGameConf;
 	
 	for (int iClient = 1; iClient <= MaxClients; iClient++)
 	{
@@ -163,7 +175,7 @@ public void SDKHookCB_HealthKit_SpawnPost(int iEntity)
 	if (!TF2_IsHolidayActive(TFHoliday_HalloweenOrFullMoon))
 	{
 		// Force normal non-holiday health kit model
-		SetEntProp(iEntity, Prop_Send, "m_nModelIndexOverrides", 0, _, 2);
+		SetEntProp(iEntity, Prop_Send, "m_nModelIndexOverrides", 0, _, VISION_MODE_HALLOWEEN);
 	}
 	
 	g_bNoForcedHoliday = false;
@@ -240,7 +252,7 @@ void TogglePlugin(bool bEnable)
 
 void ReplicateHolidayToClient(int iClient, TFHoliday eHoliday)
 {
-	char szHoliday[20];
+	char szHoliday[11];
 	if (IntToString(view_as<int>(eHoliday), szHoliday, sizeof(szHoliday)))
 	{
 		// Make client code think that it is a different holiday
