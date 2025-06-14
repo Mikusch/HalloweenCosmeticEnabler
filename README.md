@@ -1,17 +1,18 @@
-# [TF2] Halloween Cosmetic Enabler
+# Halloween Cosmetic Enabler
 
-This is a plugin that allows players to equip cosmetics with a Halloween / Full Moon restriction all year around.
+This is a Team Fortress 2 plugin that allows players to equip cosmetics with a Halloween / Full Moon restriction all year around.
 
-### I already have a plugin that does the same thing. Why would I need this?
+### How is this different from setting `tf_forced_holiday` or using other similar plugins?
 
-Most servers and similar plugins set `tf_forced_holiday` to a value that allows holiday-restricted cosmetics to be equipped all year around.
+Simply setting `tf_forced_holiday` can cause a few issues:
 
-However, this causes several problems:
+1. The `tf_logic_on_holiday` entity will always think that it is currently Halloween, breaking compatibility with custom maps that want to determine the currently active holiday.
+2. If `tf_forced_holiday` is set to another value, Halloween cosmetics and spells will cease to function.
 
-1. Maps that use the `tf_logic_on_holiday` entity to determine the current active holiday will always think that it is currently Halloween.
-2. Even if it actually is Halloween or Full Moon, many of those plugins will still unintentionally remove or block holiday features, such as Halloween soul packs or Thriller taunts.
-3. If `tf_forced_holiday` is set to another value, Halloween cosmetics and spells will cease to function.
+Furthermore, other similar plugins are known to remove or block holiday features, such as Halloween soul packs or
+Thriller taunts.
 
-This plugin solves all of these problems. It enables Halloween cosmetics and spells to work all year around, while allowing the TF2 holidays to occur as they normally would.
+This plugin solves all these issues, only enabling what it needs to in order to allow players to equip their holiday-restricted items at all times.
 
-It is **not** required to set `tf_forced_holiday` for this plugin to work. In fact, you shouldn't.
+> [!IMPORTANT]  
+> It is **not** required to set `tf_forced_holiday` for this plugin to work. In fact, you **shouldn't**.
