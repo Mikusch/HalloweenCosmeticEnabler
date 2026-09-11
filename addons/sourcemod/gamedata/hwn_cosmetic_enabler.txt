@@ -12,14 +12,6 @@
 				"windows"	"\x55\x8B\xEC\xA1\x2A\x2A\x2A\x2A\x83\x78\x30\x00\x74\x2A\x32\xC0"
 				"windows64"	"\x48\x83\xEC\x28\x48\x8B\x05\x3D\x7D\x9B\x00"
 			}
-			"CLogicOnHoliday::InputFire"
-			{
-				"library"	"server"
-				"linux"		"@_ZN15CLogicOnHoliday9InputFireER11inputdata_t"
-				"linux64"	"@_ZN15CLogicOnHoliday9InputFireER11inputdata_t"
-				"windows"	"\x55\x8B\xEC\x51\x53\x56\x6A\x0B"
-				"windows64"	"\x48\x89\x5C\x24\x08\x48\x89\x6C\x24\x10\x48\x89\x74\x24\x18\x48\x89\x7C\x24\x20\x41\x54\x41\x56\x41\x57\x48\x83\xEC\x20\x48\x8B\xD9\xB9\x0B\x00\x00\x00"
-			}
 		}
 		"Functions"
 		{
@@ -34,20 +26,6 @@
 					"eHoliday"
 					{
 						"type"	"int"
-					}
-				}
-			}
-			"CLogicOnHoliday::InputFire"
-			{
-				"signature"	"CLogicOnHoliday::InputFire"
-				"callconv"	"thiscall"
-				"return"	"void"
-				"this"		"entity"
-				"arguments"
-				{
-					"inputdata_t"
-					{
-						"type"	"objectptr"
 					}
 				}
 			}
